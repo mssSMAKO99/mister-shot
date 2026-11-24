@@ -13,7 +13,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>MisterShot</Product>
     <Description>Скриншот активного окна в буфер обмена (трей, Ctrl+Alt+S)</Description>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <DebugType>embedded</DebugType>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 
