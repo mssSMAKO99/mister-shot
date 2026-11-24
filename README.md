@@ -55,26 +55,3 @@ dotnet publish MisterShot.csproj -c Release -r win-x64 -o publish
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/generate-icon.ps1
 ```
-
-## CI / Release
-
-Workflow `.github/workflows/release.yml` запускается по тегу `v*` (или вручную) и:
-
-1. собирает нативный `MisterShot.exe` (NativeAOT) и прикрепляет его к GitHub Release;
-2. публикует `install.ps1` в репозиторий `msssmako99.github.io` под коротким именем
-   `mshot` (без расширения), чтобы работала команда `irm https://msssmako99.github.io/mshot | iex`.
-
-### Требуемый секрет
-
-Для кросс-репозиторной публикации нужен Personal Access Token с правом записи
-в `msssmako99/msssmako99.github.io`, сохранённый как секрет репозитория:
-
-- `PAGES_REPO_TOKEN` — fine-grained PAT (или classic) с доступом **Contents: Read and write**
-  к репозиторию `msssmako99/msssmako99.github.io`.
-
-### Выпуск новой версии
-
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
-```
