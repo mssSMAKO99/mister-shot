@@ -1,41 +1,107 @@
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using static MisterShot.Native;
 
 namespace MisterShot;
 
-/// <summary>Captures the currently focused window exactly as it appears on screen.</summary>
-internal static class ScreenCapture
+/// <summary>Captures the focused window to a clipboard-ready CF_DIB byte block.</summary>
+internal static unsafe class ScreenCapture
 {
-    private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    private const int HeaderSize = 40; // sizeof(BITMAPINFOHEADER)
 
-    public static Bitmap? CaptureActiveWindow()
+    public static bool TryCaptureActiveWindow(out byte[] dib)
     {
+        dib = [];
+
         IntPtr hwnd = GetForegroundWindow();
         if (hwnd == IntPtr.Zero || IsIconic(hwnd))
         {
-            return null;
+            return false;
         }
 
         if (!TryGetFrameBounds(hwnd, out RECT rect) && !GetWindowRect(hwnd, out rect))
         {
-            return null;
+            return false;
         }
 
-        int width = rect.Right - rect.Left;
-        int height = rect.Bottom - rect.Top;
+        int width = rect.right - rect.left;
+        int height = rect.bottom - rect.top;
         if (width <= 0 || height <= 0)
         {
-            return null;
+            return false;
         }
 
-        var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(bitmap))
+        IntPtr hdcScreen = GetDC(IntPtr.Zero);
+        if (hdcScreen == IntPtr.Zero)
         {
-            graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
+            return false;
         }
 
-        return bitmap;
+        IntPtr hdcMem = CreateCompatibleDC(hdcScreen);
+        IntPtr hbm = CreateCompatibleBitmap(hdcScreen, width, height);
+        if (hdcMem == IntPtr.Zero || hbm == IntPtr.Zero)
+        {
+            if (hbm != IntPtr.Zero) DeleteObject(hbm);
+            if (hdcMem != IntPtr.Zero) DeleteDC(hdcMem);
+            ReleaseDC(IntPtr.Zero, hdcScreen);
+            return false;
+        }
+
+        IntPtr old = SelectObject(hdcMem, hbm);
+        bool captured = BitBlt(hdcMem, 0, 0, width, height, hdcScreen, rect.left, rect.top, SRCCOPY | CAPTUREBLT);
+        // GetDIBits requires the bitmap NOT to be selected into a DC.
+        SelectObject(hdcMem, old);
+
+        if (!captured)
+        {
+            DeleteObject(hbm);
+            DeleteDC(hdcMem);
+            ReleaseDC(IntPtr.Zero, hdcScreen);
+            return false;
+        }
+
+        int imageSize = width * 4 * height;
+        IntPtr pixels = Marshal.AllocHGlobal(imageSize);
+
+        var header = new BITMAPINFOHEADER
+        {
+            biSize = (uint)HeaderSize,
+            biWidth = width,
+            biHeight = height, // bottom-up
+            biPlanes = 1,
+            biBitCount = 32,
+            biCompression = BI_RGB,
+            biSizeImage = (uint)imageSize,
+        };
+
+        int scanned = GetDIBits(hdcMem, hbm, 0, (uint)height, pixels, ref header, DIB_RGB_COLORS);
+
+        DeleteObject(hbm);
+        DeleteDC(hdcMem);
+        ReleaseDC(IntPtr.Zero, hdcScreen);
+
+        if (scanned == 0)
+        {
+            Marshal.FreeHGlobal(pixels);
+            return false;
+        }
+
+        // GDI leaves the alpha byte undefined in BI_RGB bitmaps; force opaque so
+        // consumers that read alpha don't render a transparent image.
+        byte* source = (byte*)pixels;
+        for (int i = 3; i < imageSize; i += 4)
+        {
+            source[i] = 255;
+        }
+
+        dib = new byte[HeaderSize + imageSize];
+        fixed (byte* destination = dib)
+        {
+            *(BITMAPINFOHEADER*)destination = header;
+            Buffer.MemoryCopy(source, destination + HeaderSize, imageSize, imageSize);
+        }
+
+        Marshal.FreeHGlobal(pixels);
+        return true;
     }
 
     /// <summary>
@@ -48,8 +114,7 @@ internal static class ScreenCapture
         try
         {
             int hr = DwmGetWindowAttribute(
-                hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT nativeRect, Marshal.SizeOf<RECT>());
-
+                hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT nativeRect, sizeof(RECT));
             if (hr == 0)
             {
                 rect = nativeRect;
@@ -58,32 +123,9 @@ internal static class ScreenCapture
         }
         catch (DllNotFoundException)
         {
-            // dwmapi unavailable (very old Windows) — fall back to GetWindowRect.
+            // dwmapi unavailable — fall back to GetWindowRect.
         }
 
         return false;
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 }

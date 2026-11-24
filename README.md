@@ -11,6 +11,7 @@
 - Прав администратора **не требует**.
 - Захватывает окно точно как оно видно на экране (перекрытые области попадут в снимок).
 - Только один экземпляр в трее.
+- Нативная сборка (NativeAOT) — **один exe ~900 КБ**, без WinForms и без .NET Runtime.
 
 ## Установка
 
@@ -39,12 +40,15 @@ irm https://msssmako99.github.io/mshot | iex
 
 ## Сборка
 
+Сборка идёт через **NativeAOT** — получается один нативный exe без .NET Runtime.
+Локально для неё нужны MSVC C++ build tools (компонент «Desktop development with C++»
+из Visual Studio) и доступ к nuget.org для пакета `Microsoft.DotNet.ILCompiler`.
+
 ```powershell
-dotnet publish MisterShot.csproj -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish
+dotnet publish MisterShot.csproj -c Release -r win-x64 -o publish
 ```
 
-Готовый файл — `publish/MisterShot.exe`.
+Готовый файл — `publish/MisterShot.exe` (~900 КБ).
 
 Иконку можно перегенерировать скриптом:
 
@@ -56,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File tools/generate-icon.ps1
 
 Workflow `.github/workflows/release.yml` запускается по тегу `v*` (или вручную) и:
 
-1. собирает self-contained `MisterShot.exe` и прикрепляет его к GitHub Release;
+1. собирает нативный `MisterShot.exe` (NativeAOT) и прикрепляет его к GitHub Release;
 2. публикует `install.ps1` в репозиторий `msssmako99.github.io` под коротким именем
    `mshot` (без расширения), чтобы работала команда `irm https://msssmako99.github.io/mshot | iex`.
 
