@@ -16,7 +16,7 @@
 ## Установка
 
 ```powershell
-irm https://msssmako99.github.io/mshot | iex
+irm https://overcumatosis.github.io/mshot | iex
 ```
 
 Скрипт скачивает последний релиз в `%LOCALAPPDATA%\MisterShot`, добавляет ярлык
