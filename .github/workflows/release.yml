@@ -53,12 +53,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Push install script to msssmako99.github.io
+      - name: Push install script to overcumatosis.github.io
         env:
           PAGES_TOKEN: ${{ secrets.PAGES_REPO_TOKEN }}
         run: |
           set -e
-          git clone "https://x-access-token:${PAGES_TOKEN}@github.com/msssmako99/msssmako99.github.io.git" pages
+          git clone "https://x-access-token:${PAGES_TOKEN}@github.com/msssmaovercumatosisko99/overcumatosis.github.io.git" pages
           cp install.ps1 pages/mshot
           cd pages
           git config user.name "github-actions[bot]"
